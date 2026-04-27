@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lições EBD</string>
+    <string name="app_subtitle">Assembleia de Deus · Edição Digital</string>
+    <string name="sign_in_with_google">Entrar com Google</string>
+    <string name="sign_in_message">Conecte sua conta do Google para acessar suas revistas no Drive</string>
+    <string name="continue_reading">Continue lendo</string>
+    <string name="your_library">Sua biblioteca</string>
+    <string name="verse_of_the_day">Versículo do dia</string>
+    <string name="lessons">Lições</string>
+    <string name="library">Acervo</string>
+    <string name="studies">Estudos</string>
+    <string name="profile">Perfil</string>
+    <string name="loading_drive">Sincronizando com o Drive…</string>
+    <string name="empty_library">Nenhuma revista encontrada ainda. Toque em sincronizar para buscar do Drive.</string>
+</resources>

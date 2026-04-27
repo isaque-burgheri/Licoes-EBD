@@ -1,0 +1,10 @@
+# Copie este arquivo para "local.properties" (mesma pasta) e cole seus IDs.
+# O local.properties está no .gitignore e NUNCA vai para o git.
+
+# API key do Google Cloud (com Drive API habilitada)
+DRIVE_API_KEY=COLE_SUA_CHAVE_AQUI
+
+# ID da pasta pública de áudios no Drive
+# Está sempre na URL: drive.google.com/drive/folders/<ID_AQUI>
+# Se deixar em branco, a aba "Áudios" aparece vazia (mostrando como adicionar).
+AUDIO_FOLDER_ID=

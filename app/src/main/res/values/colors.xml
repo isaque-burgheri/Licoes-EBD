@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper">#FAF6EC</color>
+    <color name="paper_dark">#EFE7D4</color>
+    <color name="bg">#F3EDE1</color>
+    <color name="ink">#1A1410</color>
+    <color name="ink_soft">#4A3F33</color>
+    <color name="gold">#B08838</color>
+    <color name="gold_deep">#8A6620</color>
+    <color name="burgundy">#6B1F24</color>
+    <color name="night">#16212E</color>
+    <color name="line">#1F1A1410</color>
+</resources>
