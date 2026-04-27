@@ -97,7 +97,7 @@ private fun AlbumsList(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Adicione áudios na pasta do Drive seguindo o padrão \u201cEBD 2020-2T-L03.mp3\u201d. Eles aparecerão aqui automaticamente, agrupados por revista.",
+                    "Adicione áudios na pasta do Drive seguindo o padrão \"EBD 2020-2T-L03.mp3\" ou com variantes \"EBD 2020-2T-L03-IA.mp3\". Eles aparecerão aqui automaticamente, agrupados por revista.",
                     style = EbdTypography.italicSerif.copy(color = InkSoft, fontSize = 14.sp),
                     textAlign = TextAlign.Center
                 )
@@ -201,23 +201,25 @@ private fun AlbumBlock(
 
         Spacer(Modifier.height(8.dp))
 
-        // Tracks
+        // Tracks grouped by lesson number
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(PaperDark)
         ) {
-            album.tracks.forEachIndexed { idx, track ->
-                TrackRow(
-                    track = track,
-                    isPlaying = currentTrackId == track.id,
-                    onClick = { onTrackClick(track) }
+            // Group tracks by orderHint (0 = revista, 1..13 = lições)
+            val groupedByLesson = album.tracks.groupBy { it.orderHint }.toSortedMap()
+            
+            groupedByLesson.entries.forEachIndexed { groupIdx, (_, tracksInLesson) ->
+                LessonRowWithVariants(
+                    tracks = tracksInLesson,
+                    currentTrackId = currentTrackId,
+                    onTrackClick = onTrackClick
                 )
-                if (idx < album.tracks.lastIndex) {
+                if (groupIdx < groupedByLesson.size - 1) {
                     Box(
                         modifier = Modifier
-                            .padding(start = 56.dp)
                             .fillMaxWidth()
                             .height(0.5.dp)
                             .background(Color(0x141A1410))
@@ -229,41 +231,61 @@ private fun AlbumBlock(
 }
 
 @Composable
-private fun TrackRow(
-    track: AudioTrack,
-    isPlaying: Boolean,
-    onClick: () -> Unit
+private fun LessonRowWithVariants(
+    tracks: List<AudioTrack>,
+    currentTrackId: String?,
+    onTrackClick: (AudioTrack) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(if (isPlaying) Burgundy else Color(0x14000000)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = if (isPlaying) "♪" else "▶",
-                color = if (isPlaying) Paper else Ink,
-                fontSize = 12.sp
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                track.title,
-                style = EbdTypography.titleSerif.copy(
-                    fontSize = 14.sp,
-                    color = if (isPlaying) Burgundy else Ink
-                ),
-                maxLines = 2
-            )
+        // Left column: lesson title (e.g., "Lição 01" or "Revista completa")
+        Text(
+            text = tracks.first().title,
+            style = EbdTypography.titleSerif.copy(
+                fontSize = 14.sp,
+                color = Ink
+            ),
+            modifier = Modifier.weight(1f)
+        )
+
+        // Right columns: variant buttons (IA, Oficial, v1, etc)
+        tracks.forEach { track ->
+            val variant = track.variant ?: "Play"
+            val isPlaying = currentTrackId == track.id
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(
+                        if (isPlaying) Burgundy else Color(0x14000000)
+                    )
+                    .clickable { onTrackClick(track) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        if (isPlaying) "♪" else "▶",
+                        color = if (isPlaying) Paper else Ink,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    Text(
+                        variant,
+                        style = EbdTypography.label.copy(
+                            fontSize = 9.sp,
+                            color = if (isPlaying) Paper else Ink
+                        )
+                    )
+                }
+            }
         }
     }
 }

@@ -16,6 +16,7 @@ data class AudioTrack(
     val title: String,          // Cleaned (e.g. "Lição 5 — A graça de Deus")
     val rawName: String,
     val orderHint: Int,         // For sorting (0 = album-wide, 1..13 = lessons)
+    val variant: String?,       // "IA", "Oficial", "v1", "v2", etc. null if no variant
     val mimeType: String,
     val sizeBytes: Long?
 )

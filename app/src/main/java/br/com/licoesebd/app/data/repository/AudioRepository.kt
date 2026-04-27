@@ -43,7 +43,8 @@ class AudioRepository(private val context: Context) {
             val year: Int?,
             val quarter: String?,   // "1T".."4T" or null
             val orderHint: Int,     // 0 = revista completa, 1..N = lições
-            val trackTitle: String
+            val trackTitle: String,
+            val variant: String?    // "IA", "Oficial", "v1", etc
         )
 
         val parsed = files.map { f ->
@@ -53,7 +54,8 @@ class AudioRepository(private val context: Context) {
                 year = info.year,
                 quarter = info.quarter,
                 orderHint = info.orderHint,
-                trackTitle = info.trackTitle
+                trackTitle = info.trackTitle,
+                variant = info.variant
             )
         }
 
@@ -74,6 +76,7 @@ class AudioRepository(private val context: Context) {
                         title = p.trackTitle,
                         rawName = p.file.name,
                         orderHint = p.orderHint,
+                        variant = p.variant,
                         mimeType = p.file.mimeType,
                         sizeBytes = p.file.sizeBytes
                     )
@@ -167,13 +170,20 @@ private data class AudioInfo(
     val year: Int?,
     val quarter: String?,    // "1T", "2T", ...
     val orderHint: Int,      // 0 = revista, N = lição N, 999 = unknown
-    val trackTitle: String   // human-friendly, e.g. "Lição 3" or "Revista completa"
+    val trackTitle: String,  // human-friendly, e.g. "Lição 3" or "Revista completa"
+    val variant: String?     // "IA", "Oficial", "v1", "v2", etc. null if none
 )
 
 /**
  * Parses names like:
- *   "EBD 2020-2T-L03.mp3", "ebd 2020-2t-l3", "EBD 2020-2T-Revista.mp3"
+ *   "EBD 2020-2T-L03-IA.mp3", "ebd 2020-2t-l3-oficial", "EBD 2020-2T-Revista-v1.mp3"
  * Tolerates extra prefixes/suffixes; falls back gracefully when parts are missing.
+ *
+ * Variant detection (case-insensitive):
+ *   - "-IA", "-AI", "-ia" → "IA"
+ *   - "-Oficial", "-oficial", "-official" → "Oficial"
+ *   - "-v1", "-V2", etc → "v1", "v2"
+ *   - Any other "-xxx" suffix → kept as-is (uppercase first letter)
  */
 private fun parseAudioName(rawName: String): AudioInfo {
     val base = rawName.substringBeforeLast('.')
@@ -204,5 +214,15 @@ private fun parseAudioName(rawName: String): AudioInfo {
         else -> base // last-resort fallback
     }
 
-    return AudioInfo(year, quarter, orderHint, trackTitle)
+    // Extract variant suffix (e.g., "-IA", "-Oficial", "-v1")
+    val variantMatch = Regex("(?i)-(ia|ai|oficial|official|v\\d+|\\w+)\\s*$").find(base)
+    val variant = variantMatch?.groupValues?.get(1)?.let { raw ->
+        when (raw.lowercase()) {
+            "ia", "ai" -> "IA"
+            "oficial", "official" -> "Oficial"
+            else -> raw.lowercase().replaceFirstChar { it.uppercase() }
+        }
+    }
+
+    return AudioInfo(year, quarter, orderHint, trackTitle, variant)
 }
