@@ -169,13 +169,13 @@ private fun AlbumBlock(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = listOfNotNull(album.quarter, album.year?.toString())
+                    text = listOfNotNull(album.quarter?.replace("T", "º Trimestre"), album.year?.toString())
                         .joinToString(" · ").ifEmpty { "REVISTA" },
                     style = EbdTypography.label.copy(color = Gold, fontSize = 10.sp)
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = album.title.ifEmpty { "Lições Bíblicas" },
+                    text = album.title.replace("T", "º Trimestre").ifEmpty { "Lições Bíblicas" },
                     style = EbdTypography.titleSerif.copy(
                         color = Color(0xFFF0E6D2), fontSize = 18.sp
                     )
