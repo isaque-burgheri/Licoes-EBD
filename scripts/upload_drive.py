@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Faz upload de um arquivo para uma pasta do Google Drive usando uma
-Conta de Servico. A credencial JSON vem da variavel de ambiente
-GOOGLE_CREDENTIALS (configurada como secret no GitHub).
+Faz upload de um arquivo para uma pasta do Google Drive usando OAuth
+(credenciais do proprio usuario). Assim o arquivo vai para o seu Drive
+pessoal, usando sua cota de 15GB.
+
+Autenticacao:
+  As credenciais OAuth vem de duas variaveis de ambiente (secrets no GitHub):
+    - GOOGLE_OAUTH_CLIENT : o JSON do "OAuth client" (tipo Desktop app)
+    - GOOGLE_OAUTH_TOKEN  : o JSON do token gerado uma vez no seu PC
+                            (contem o refresh_token que renova o acesso sozinho)
 
 Uso:
-    python scripts/upload_drive.py "caminho/do/arquivo.m4a"
+    python scripts/upload_drive.py "caminho/do/arquivo.mp3"
 
-Se ja existir um arquivo com o mesmo nome na pasta, ele e substituido,
-para evitar duplicatas caso o workflow rode mais de uma vez.
+Se ja existir um arquivo com o mesmo nome na pasta, ele e substituido.
 """
 
 import json
@@ -17,7 +22,8 @@ import os
 import sys
 from pathlib import Path
 
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
@@ -28,13 +34,24 @@ ESCOPOS = ["https://www.googleapis.com/auth/drive"]
 
 
 def autenticar():
-    cred_json = os.environ.get("GOOGLE_CREDENTIALS")
-    if not cred_json:
-        sys.exit("ERRO: secret GOOGLE_CREDENTIALS nao definido.")
-    info = json.loads(cred_json)
-    creds = service_account.Credentials.from_service_account_info(
-        info, scopes=ESCOPOS
-    )
+    token_json = os.environ.get("GOOGLE_OAUTH_TOKEN")
+    client_json = os.environ.get("GOOGLE_OAUTH_CLIENT")
+    if not token_json:
+        sys.exit("ERRO: secret GOOGLE_OAUTH_TOKEN nao definido.")
+    if not client_json:
+        sys.exit("ERRO: secret GOOGLE_OAUTH_CLIENT nao definido.")
+
+    info = json.loads(token_json)
+    client = json.loads(client_json)
+    # o token precisa saber o client_id/secret para poder renovar
+    dados = client.get("installed") or client.get("web") or {}
+    info.setdefault("client_id", dados.get("client_id"))
+    info.setdefault("client_secret", dados.get("client_secret"))
+    info.setdefault("token_uri", dados.get("token_uri", "https://oauth2.googleapis.com/token"))
+
+    creds = Credentials.from_authorized_user_info(info, ESCOPOS)
+    if not creds.valid and creds.refresh_token:
+        creds.refresh(Request())
     return build("drive", "v3", credentials=creds)
 
 
@@ -43,10 +60,7 @@ def achar_existente(service, nome):
         f"name = '{nome}' and "
         f"'{PASTA_DRIVE_ID}' in parents and trashed = false"
     )
-    resp = service.files().list(
-        q=q, fields="files(id, name)", supportsAllDrives=True,
-        includeItemsFromAllDrives=True,
-    ).execute()
+    resp = service.files().list(q=q, fields="files(id, name)").execute()
     arquivos = resp.get("files", [])
     return arquivos[0]["id"] if arquivos else None
 
@@ -64,16 +78,11 @@ def main():
 
     existente = achar_existente(service, nome)
     if existente:
-        service.files().update(
-            fileId=existente, media_body=media, supportsAllDrives=True
-        ).execute()
+        service.files().update(fileId=existente, media_body=media).execute()
         print(f"Atualizado no Drive (substituido): {nome}")
     else:
         meta = {"name": nome, "parents": [PASTA_DRIVE_ID]}
-        service.files().create(
-            body=meta, media_body=media, fields="id",
-            supportsAllDrives=True,
-        ).execute()
+        service.files().create(body=meta, media_body=media, fields="id").execute()
         print(f"Enviado ao Drive: {nome}")
 
 

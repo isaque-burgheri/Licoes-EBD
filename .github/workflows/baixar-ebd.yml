@@ -27,7 +27,7 @@ jobs:
       - name: Instalar dependencias Python
         run: |
           python -m pip install --upgrade pip
-          pip install feedparser google-api-python-client google-auth
+          pip install feedparser google-api-python-client google-auth google-auth-oauthlib
 
       - name: Baixar audio da licao mais recente
         id: download
@@ -36,7 +36,8 @@ jobs:
       - name: Enviar para o Google Drive
         if: steps.download.outputs.baixou == 'sim'
         env:
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_OAUTH_CLIENT: ${{ secrets.GOOGLE_OAUTH_CLIENT }}
+          GOOGLE_OAUTH_TOKEN: ${{ secrets.GOOGLE_OAUTH_TOKEN }}
         run: python scripts/upload_drive.py "${{ steps.download.outputs.arquivo }}"
 
       - name: Salvar registro de baixados

@@ -11,3 +11,5 @@ local.properties
 app/build/
 build/
 cookies.txt
+client_secret.json
+token.json
