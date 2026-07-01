@@ -82,6 +82,8 @@ def listar_videos_canal():
         "--flat-playlist",
         "--playlist-end", str(QTD_INSPECIONAR),
         "--dump-json",
+        "--retries", "10",
+        "--retry-sleep", "5",
         *opcoes_cookies(),
         CANAL_URL,
     ]
@@ -120,6 +122,11 @@ def baixar_audio(video_id, nome_base):
         "-x",
         "--audio-format", "m4a",
         "--audio-quality", "5",   # 0=melhor, 9=menor arquivo; 5 = bom equilibrio
+        # baixa o script solucionador de desafios JS do YouTube (obrigatorio agora)
+        "--remote-components", "ejs:github",
+        # robustez contra 429 (Too Many Requests) do YouTube
+        "--retries", "10",
+        "--retry-sleep", "5",
         *opcoes_cookies(),
         "-o", modelo_saida,
         f"https://www.youtube.com/watch?v={video_id}",
