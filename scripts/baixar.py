@@ -1,45 +1,36 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Baixa o audio da licao EBD mais recente do canal Rede Brasil Oficial,
-renomeia no padrao EBD AAAA-NT-LNN e deixa o arquivo pronto para upload.
+Baixa o audio da licao EBD mais recente do PODCAST da Rede Brasil (via RSS),
+renomeia no padrao EBD AAAA-NT-LNN.mp3 e deixa pronto para upload no Drive.
+
+Por que RSS e nao YouTube:
+  O YouTube passou a bloquear downloads de servidores (bot check, PO token, 403).
+  O audio do podcast e um MP3 comum, livre, sem nenhum desses bloqueios.
 
 Funciona assim:
-  1. Le config.json (ano e trimestre, que voce edita 1x por trimestre).
-  2. Usa o yt-dlp para listar os videos recentes do canal.
-  3. Pega o video mais recente cujo titulo comeca com "EBD" e tem numero de licao.
+  1. Le config.json (ano, trimestre e a URL do feed RSS).
+  2. Le o feed RSS e lista os episodios (mais recente primeiro).
+  3. Pega o episodio mais recente cujo titulo tem numero de licao ("EBD ... Na LICAO").
   4. Verifica em baixados.txt se ja foi baixado (se sim, encerra sem fazer nada).
-  5. Baixa so o audio no menor formato disponivel.
-  6. Renomeia para EBD AAAA-NT-LNN.<ext> e registra no arquivo de controle.
+  5. Baixa o MP3 do episodio.
+  6. Renomeia para EBD AAAA-NT-LNN.mp3 e registra no arquivo de controle.
 """
 
 import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
+from urllib.request import urlopen, Request
+
+import feedparser
 
 # --- Caminhos ---
 RAIZ = Path(__file__).resolve().parent.parent
 CONFIG = RAIZ / "config.json"
 ARQUIVO_CONTROLE = RAIZ / "baixados.txt"
 PASTA_SAIDA = RAIZ / "saida"
-
-CANAL_URL = "https://www.youtube.com/@redebrasiloficial/videos"
-
-# Quantos videos recentes do canal inspecionar para achar o EBD mais novo.
-QTD_INSPECIONAR = 15
-
-# Se existir um arquivo cookies.txt na raiz, usa para autenticar no YouTube.
-COOKIES = RAIZ / "cookies.txt"
-
-
-def opcoes_cookies():
-    """Retorna a lista de args de cookie para o yt-dlp, se o arquivo existir."""
-    if COOKIES.exists() and COOKIES.stat().st_size > 0:
-        return ["--cookies", str(COOKIES)]
-    return []
 
 
 def ler_config():
@@ -49,21 +40,23 @@ def ler_config():
     trimestre = int(cfg["trimestre"])
     if trimestre not in (1, 2, 3, 4):
         sys.exit(f"ERRO: trimestre invalido no config.json: {trimestre}")
-    return ano, trimestre
+    feed_url = cfg.get("feed_rss", "").strip()
+    if not feed_url:
+        sys.exit("ERRO: 'feed_rss' nao definido no config.json.")
+    return ano, trimestre, feed_url
 
 
 def extrair_numero_licao(titulo):
     """
-    Extrai o numero da licao do titulo do video.
+    Extrai o numero da licao do titulo do episodio.
     Cobre formatos como:
-      'EBD | 1a LICAO: ...'  'EBD | 12a LICAO ...'
-      'EBD - LICAO 03 ...'   'EBD 4a Licao ...'
-    Retorna int ou None.
+      'EBD | 1a LICAO: ...'   'EBD | 12a LICAO ...'
+      '01a LICAO: ... | EBD'  'EBD - LICAO 03 ...'   'EBD 4a Licao ...'
+    Retorna int (1-13) ou None.
     """
     t = titulo.upper()
-    if not t.lstrip().startswith("EBD"):
+    if "EBD" not in t:
         return None
-    # procura "<numero>a LICAO" ou "LICAO <numero>"
     m = re.search(r"(\d{1,2})\s*[ªAº]?\s*LI[ÇC][ÃA]O", t)
     if not m:
         m = re.search(r"LI[ÇC][ÃA]O\s*(\d{1,2})", t)
@@ -75,101 +68,93 @@ def extrair_numero_licao(titulo):
     return None
 
 
-def listar_videos_canal():
-    """Retorna lista de dicts {id, title} dos videos mais recentes do canal."""
-    cmd = [
-        "yt-dlp",
-        "--flat-playlist",
-        "--playlist-end", str(QTD_INSPECIONAR),
-        "--dump-json",
-        "--retries", "10",
-        "--retry-sleep", "5",
-        *opcoes_cookies(),
-        CANAL_URL,
-    ]
-    saida = subprocess.run(cmd, capture_output=True, text=True)
-    if saida.returncode != 0:
-        print("Falha ao listar o canal:", saida.stderr, file=sys.stderr)
-        sys.exit(1)
-    videos = []
-    for linha in saida.stdout.strip().splitlines():
-        try:
-            d = json.loads(linha)
-            videos.append({"id": d.get("id"), "title": d.get("title", "")})
-        except json.JSONDecodeError:
-            continue
-    return videos
+def achar_url_audio(entry):
+    """Extrai a URL do arquivo de audio (enclosure) de um episodio do RSS."""
+    for enc in entry.get("enclosures", []):
+        href = enc.get("href") or enc.get("url")
+        if href:
+            return href
+    for link in entry.get("links", []):
+        if link.get("rel") == "enclosure" and link.get("href"):
+            return link["href"]
+    return None
 
 
-def ja_baixado(video_id):
+def listar_episodios(feed_url):
+    """Retorna lista de dicts {id, title, audio} dos episodios (mais recente primeiro)."""
+    feed = feedparser.parse(feed_url)
+    if feed.bozo and not feed.entries:
+        sys.exit(f"ERRO: nao foi possivel ler o feed RSS: {feed_url}")
+    episodios = []
+    for e in feed.entries:
+        episodios.append({
+            "id": e.get("id") or e.get("guid") or e.get("link") or e.get("title"),
+            "title": e.get("title", ""),
+            "audio": achar_url_audio(e),
+        })
+    return episodios
+
+
+def ja_baixado(ep_id):
     if not ARQUIVO_CONTROLE.exists():
         return False
-    return video_id in ARQUIVO_CONTROLE.read_text(encoding="utf-8").split()
+    marcados = ARQUIVO_CONTROLE.read_text(encoding="utf-8").splitlines()
+    return ep_id in [m.strip() for m in marcados]
 
 
-def registrar_baixado(video_id):
+def registrar_baixado(ep_id):
     with open(ARQUIVO_CONTROLE, "a", encoding="utf-8") as f:
-        f.write(video_id + "\n")
+        f.write(ep_id + "\n")
 
 
-def baixar_audio(video_id, nome_base):
-    """Baixa o menor audio disponivel e converte para m4a. Retorna o caminho final."""
+def baixar_mp3(url, nome_base):
+    """Baixa o MP3 do episodio. Retorna o caminho final."""
     PASTA_SAIDA.mkdir(exist_ok=True)
-    modelo_saida = str(PASTA_SAIDA / (nome_base + ".%(ext)s"))
-    cmd = [
-        "yt-dlp",
-        "-f", "bestaudio[ext=m4a]/bestaudio/best",
-        "-x",
-        "--audio-format", "m4a",
-        "--audio-quality", "5",   # 0=melhor, 9=menor arquivo; 5 = bom equilibrio
-        # baixa o script solucionador de desafios JS do YouTube (obrigatorio agora)
-        "--remote-components", "ejs:github",
-        # robustez contra 429 (Too Many Requests) do YouTube
-        "--retries", "10",
-        "--retry-sleep", "5",
-        *opcoes_cookies(),
-        "-o", modelo_saida,
-        f"https://www.youtube.com/watch?v={video_id}",
-    ]
-    r = subprocess.run(cmd)
-    if r.returncode != 0:
-        sys.exit("ERRO: download do audio falhou.")
-    arquivos = list(PASTA_SAIDA.glob(nome_base + ".*"))
-    if not arquivos:
-        sys.exit("ERRO: arquivo de audio nao encontrado apos download.")
-    return arquivos[0]
+    destino = PASTA_SAIDA / (nome_base + ".mp3")
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urlopen(req) as resp, open(destino, "wb") as out:
+        while True:
+            bloco = resp.read(65536)
+            if not bloco:
+                break
+            out.write(bloco)
+    if destino.stat().st_size == 0:
+        sys.exit("ERRO: arquivo baixado esta vazio.")
+    return destino
 
 
 def main():
-    ano, trimestre = ler_config()
+    ano, trimestre, feed_url = ler_config()
     print(f"Config: {ano} - {trimestre}o trimestre")
 
-    videos = listar_videos_canal()
+    episodios = listar_episodios(feed_url)
     alvo = None
-    for v in videos:  # ja vem do mais recente para o mais antigo
-        n = extrair_numero_licao(v["title"])
+    for ep in episodios:  # mais recente primeiro
+        n = extrair_numero_licao(ep["title"])
         if n is not None:
-            alvo = {"id": v["id"], "title": v["title"], "licao": n}
+            alvo = {**ep, "licao": n}
             break
 
     if alvo is None:
-        print("Nenhum video EBD com numero de licao encontrado nos recentes. Encerrando.")
+        print("Nenhum episodio EBD com numero de licao encontrado. Encerrando.")
         return
 
-    print(f"Video EBD mais recente: licao {alvo['licao']:02d} -> {alvo['title']}")
+    print(f"Episodio EBD mais recente: licao {alvo['licao']:02d} -> {alvo['title']}")
+
+    if not alvo["audio"]:
+        sys.exit("ERRO: episodio encontrado mas sem URL de audio no feed.")
 
     if ja_baixado(alvo["id"]):
-        print("Esse video ja foi baixado antes. Nada a fazer.")
+        print("Esse episodio ja foi baixado antes. Nada a fazer.")
         return
 
     nome_base = f"EBD {ano}-{trimestre}T-L{alvo['licao']:02d}"
     print(f"Nome do arquivo: {nome_base}")
 
-    caminho = baixar_audio(alvo["id"], nome_base)
+    caminho = baixar_mp3(alvo["audio"], nome_base)
     registrar_baixado(alvo["id"])
     print(f"Pronto: {caminho.name} ({caminho.stat().st_size/1_048_576:.1f} MB)")
 
-    # expoe o nome para o passo seguinte do workflow
     gh_out = os.environ.get("GITHUB_OUTPUT")
     if gh_out:
         with open(gh_out, "a") as f:

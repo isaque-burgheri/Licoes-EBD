@@ -24,29 +24,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Instalar ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Instalar deno (runtime JS exigido pelo YouTube)
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
       - name: Instalar dependencias Python
         run: |
           python -m pip install --upgrade pip
-          pip install -U yt-dlp google-api-python-client google-auth
-
-      - name: Preparar cookies do YouTube
-        env:
-          YT_COOKIES: ${{ secrets.YT_COOKIES }}
-        run: |
-          if [ -n "$YT_COOKIES" ]; then
-            printf '%s' "$YT_COOKIES" > cookies.txt
-            echo "Cookies gravados."
-          else
-            echo "AVISO: secret YT_COOKIES nao definido; download pode falhar por bloqueio."
-          fi
+          pip install feedparser google-api-python-client google-auth
 
       - name: Baixar audio da licao mais recente
         id: download

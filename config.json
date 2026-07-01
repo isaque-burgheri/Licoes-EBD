@@ -1,7 +1,7 @@
 {
-  "_comentario": "EDITE ESTE ARQUIVO UMA VEZ A CADA TRIMESTRE. Mude apenas 'ano' e 'trimestre' quando virar o trimestre. O resto roda sozinho.",
+  "_comentario": "EDITE 'ano' e 'trimestre' uma vez a cada trimestre. O resto roda sozinho.",
   "ano": 2026,
   "trimestre": 3,
-  "_canal_url": "https://www.youtube.com/@redebrasiloficial/videos",
-  "_explicacao_canal": "O script procura o video 'EBD' mais recente nesta aba do canal. Nao precisa mexer aqui."
+  "feed_rss": "https://anchor.fm/s/3fb59cf0/podcast/rss",
+  "_explicacao_feed": "URL do feed RSS do podcast Rede Brasil (pegue em getrssfeed.com colando o link do Spotify). O script le esse feed e baixa o MP3 da licao mais recente."
 }
