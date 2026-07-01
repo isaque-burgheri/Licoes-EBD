@@ -105,6 +105,7 @@ private fun BottomTabs(current: Tab, onSelect: (Tab) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .background(Color(0xF2FAF6EC))
+            .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(top = 6.dp, bottom = 18.dp, start = 16.dp, end = 16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically

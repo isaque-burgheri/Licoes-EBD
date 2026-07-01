@@ -1,0 +1,7 @@
+{
+  "_comentario": "EDITE ESTE ARQUIVO UMA VEZ A CADA TRIMESTRE. Mude apenas 'ano' e 'trimestre' quando virar o trimestre. O resto roda sozinho.",
+  "ano": 2026,
+  "trimestre": 3,
+  "_canal_url": "https://www.youtube.com/@redebrasiloficial/videos",
+  "_explicacao_canal": "O script procura o video 'EBD' mais recente nesta aba do canal. Nao precisa mexer aqui."
+}

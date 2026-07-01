@@ -1,0 +1,52 @@
+name: Baixar audio EBD
+
+# Quando roda:
+#  - Toda segunda-feira as 11:00 UTC (08:00 no horario de Brasilia).
+#  - Tambem pode ser disparado manualmente na aba "Actions" do GitHub.
+on:
+  schedule:
+    - cron: "0 11 * * 1"
+  workflow_dispatch:
+
+# Permite que o workflow faca commit do baixados.txt de volta no repo.
+permissions:
+  contents: write
+
+jobs:
+  baixar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar o repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Instalar dependencias Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install yt-dlp google-api-python-client google-auth
+
+      - name: Baixar audio da licao mais recente
+        id: download
+        run: python scripts/baixar.py
+
+      - name: Enviar para o Google Drive
+        if: steps.download.outputs.baixou == 'sim'
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: python scripts/upload_drive.py "${{ steps.download.outputs.arquivo }}"
+
+      - name: Salvar registro de baixados
+        if: steps.download.outputs.baixou == 'sim'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add baixados.txt
+          git commit -m "chore: registra licao baixada (${{ steps.download.outputs.nome }})" || echo "nada para commitar"
+          git push
