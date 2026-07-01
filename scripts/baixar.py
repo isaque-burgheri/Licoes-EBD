@@ -31,6 +31,16 @@ CANAL_URL = "https://www.youtube.com/@redebrasiloficial/videos"
 # Quantos videos recentes do canal inspecionar para achar o EBD mais novo.
 QTD_INSPECIONAR = 15
 
+# Se existir um arquivo cookies.txt na raiz, usa para autenticar no YouTube.
+COOKIES = RAIZ / "cookies.txt"
+
+
+def opcoes_cookies():
+    """Retorna a lista de args de cookie para o yt-dlp, se o arquivo existir."""
+    if COOKIES.exists() and COOKIES.stat().st_size > 0:
+        return ["--cookies", str(COOKIES)]
+    return []
+
 
 def ler_config():
     with open(CONFIG, encoding="utf-8") as f:
@@ -72,6 +82,7 @@ def listar_videos_canal():
         "--flat-playlist",
         "--playlist-end", str(QTD_INSPECIONAR),
         "--dump-json",
+        *opcoes_cookies(),
         CANAL_URL,
     ]
     saida = subprocess.run(cmd, capture_output=True, text=True)
@@ -109,6 +120,7 @@ def baixar_audio(video_id, nome_base):
         "-x",
         "--audio-format", "m4a",
         "--audio-quality", "5",   # 0=melhor, 9=menor arquivo; 5 = bom equilibrio
+        *opcoes_cookies(),
         "-o", modelo_saida,
         f"https://www.youtube.com/watch?v={video_id}",
     ]
