@@ -22,7 +22,7 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = 1
-        versionName = "1.3"
+        versionName = "1.4"
         vectorDrawables { useSupportLibrary = true }
 
         buildConfigField("String", "DRIVE_API_KEY", "\"$driveApiKey\"")
