@@ -1,11 +1,11 @@
 name: Baixar audio EBD
 
 # Quando roda:
-#  - Toda segunda-feira as 11:00 UTC (08:00 no horario de Brasilia).
+#  - Toda quinta e sexta-feira as 11:00 UTC (08:00 no horario de Brasilia).
 #  - Tambem pode ser disparado manualmente na aba "Actions" do GitHub.
 on:
   schedule:
-    - cron: "0 11 * * 1"
+    - cron: "0 11 * * 4,5"
   workflow_dispatch:
 
 # Permite que o workflow faca commit do baixados.txt de volta no repo.
