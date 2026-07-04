@@ -68,6 +68,12 @@ class AudioViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val url = repo.streamUrl(track.id)
+                val uri = android.net.Uri.parse(url)
+                // Some Android ROMs need an explicit User-Agent for the
+                // googleapis.com streaming endpoint to serve bytes reliably.
+                val headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android 10) LicoesEBD/1.0"
+                )
                 val newMp = MediaPlayer().apply {
                     setAudioAttributes(
                         android.media.AudioAttributes.Builder()
@@ -75,7 +81,7 @@ class AudioViewModel(app: Application) : AndroidViewModel(app) {
                             .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
                             .build()
                     )
-                    setDataSource(url)
+                    setDataSource(getApplication(), uri, headers)
                     setOnPreparedListener { player ->
                         _player.value = _player.value.copy(
                             isBuffering = false,

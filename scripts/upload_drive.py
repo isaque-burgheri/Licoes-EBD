@@ -32,6 +32,23 @@ PASTA_DRIVE_ID = "11rhkYRHVdyeB7DfWuHkIi871Tabx2lHP"
 
 ESCOPOS = ["https://www.googleapis.com/auth/drive"]
 
+# Mapa de extensao -> mimetype de audio. Garante que o arquivo suba com o
+# Content-Type correto no Drive (nunca application/octet-stream), o que mantem
+# o Drive reconhecendo o arquivo como audio.
+MIMETYPES_AUDIO = {
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/opus",
+    ".wav": "audio/wav",
+    ".flac": "audio/flac",
+}
+
+
+def mimetype_do_arquivo(caminho: Path) -> str:
+    return MIMETYPES_AUDIO.get(caminho.suffix.lower(), "application/octet-stream")
+
 
 def autenticar():
     token_json = os.environ.get("GOOGLE_OAUTH_TOKEN")
@@ -74,16 +91,23 @@ def main():
 
     service = autenticar()
     nome = caminho.name
-    media = MediaFileUpload(str(caminho), resumable=True)
+    mime = mimetype_do_arquivo(caminho)
+    media = MediaFileUpload(str(caminho), mimetype=mime, resumable=True)
 
     existente = achar_existente(service, nome)
     if existente:
-        service.files().update(fileId=existente, media_body=media).execute()
-        print(f"Atualizado no Drive (substituido): {nome}")
+        # Atualiza tambem o mimeType nos metadados, caso o arquivo tenha sido
+        # enviado antes com um tipo generico.
+        service.files().update(
+            fileId=existente,
+            body={"mimeType": mime},
+            media_body=media,
+        ).execute()
+        print(f"Atualizado no Drive (substituido): {nome} [{mime}]")
     else:
-        meta = {"name": nome, "parents": [PASTA_DRIVE_ID]}
+        meta = {"name": nome, "parents": [PASTA_DRIVE_ID], "mimeType": mime}
         service.files().create(body=meta, media_body=media, fields="id").execute()
-        print(f"Enviado ao Drive: {nome}")
+        print(f"Enviado ao Drive: {nome} [{mime}]")
 
 
 if __name__ == "__main__":

@@ -96,9 +96,22 @@ class AudioRepository(private val context: Context) {
             )
     }
 
-    /** Streamable URL for a Drive audio file. MediaPlayer follows the redirect fine. */
+    /**
+     * Streamable URL for a Drive audio file.
+     *
+     * IMPORTANT: we intentionally do NOT use "drive.google.com/uc?export=download".
+     * That endpoint returns an HTML "virus scan" interstitial for files larger
+     * than ~25MB instead of the audio bytes, which MediaPlayer/ExoPlayer cannot
+     * play (it just fails silently). Full podcast episodes are almost always
+     * above that limit, which is exactly why the auto-downloaded ones never play.
+     *
+     * The Drive REST endpoint below serves the raw bytes directly with the
+     * correct Content-Type and supports HTTP Range requests (so seeking works),
+     * regardless of file size. It works for public ("anyone with the link")
+     * files using the same API key already used for listing.
+     */
     fun streamUrl(trackId: String): String =
-        "https://drive.google.com/uc?export=download&id=$trackId"
+        "https://www.googleapis.com/drive/v3/files/$trackId?alt=media&key=$apiKey"
 
     // ---- internals ----
 
