@@ -9,7 +9,7 @@ Por que RSS e nao YouTube:
   O audio do podcast e um MP3 comum, livre, sem nenhum desses bloqueios.
 
 Funciona assim:
-  1. Le config.json (ano, trimestre e a URL do feed RSS).
+  1. Le config.json (somente a URL do feed RSS) e calcula ano/trimestre pela data.
   2. Le o feed RSS e lista os episodios (mais recente primeiro).
   3. Pega o episodio mais recente cujo titulo tem numero de licao ("EBD ... Na LICAO").
   4. Verifica em baixados.txt se ja foi baixado (se sim, encerra sem fazer nada).
@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.request import urlopen, Request
 
@@ -34,16 +35,26 @@ PASTA_SAIDA = RAIZ / "saida"
 
 
 def ler_config():
+    """Le apenas a URL do feed. Ano e trimestre agora sao calculados pela data."""
     with open(CONFIG, encoding="utf-8") as f:
         cfg = json.load(f)
-    ano = int(cfg["ano"])
-    trimestre = int(cfg["trimestre"])
-    if trimestre not in (1, 2, 3, 4):
-        sys.exit(f"ERRO: trimestre invalido no config.json: {trimestre}")
     feed_url = cfg.get("feed_rss", "").strip()
     if not feed_url:
         sys.exit("ERRO: 'feed_rss' nao definido no config.json.")
-    return ano, trimestre, feed_url
+    return feed_url
+
+
+def ano_trimestre_da_licao():
+    """
+    Ano e trimestre do domingo em que a licao sera estudada (horario de Brasilia).
+    As licoes saem na quinta/sexta para o domingo seguinte, entao usamos o
+    proximo domingo: assim a licao 1 publicada na ultima semana de setembro
+    ou na primeira de outubro cai no trimestre certo.
+    """
+    agora = datetime.now(timezone(timedelta(hours=-3)))
+    dias_ate_domingo = (6 - agora.weekday()) % 7  # segunda=0 ... domingo=6
+    domingo = agora + timedelta(days=dias_ate_domingo)
+    return domingo.year, (domingo.month - 1) // 3 + 1
 
 
 def extrair_numero_licao(titulo):
@@ -124,8 +135,9 @@ def baixar_mp3(url, nome_base):
 
 
 def main():
-    ano, trimestre, feed_url = ler_config()
-    print(f"Config: {ano} - {trimestre}o trimestre")
+    feed_url = ler_config()
+    ano, trimestre = ano_trimestre_da_licao()
+    print(f"Trimestre calculado pela data: {ano} - {trimestre}o trimestre")
 
     episodios = listar_episodios(feed_url)
     alvo = None

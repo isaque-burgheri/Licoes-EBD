@@ -21,8 +21,8 @@ android {
         applicationId = "br.com.licoesebd.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.4"
+        versionCode = 2
+        versionName = "1.5"
         vectorDrawables { useSupportLibrary = true }
 
         buildConfigField("String", "DRIVE_API_KEY", "\"$driveApiKey\"")

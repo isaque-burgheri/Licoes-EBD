@@ -1,7 +1,5 @@
 {
-  "_comentario": "EDITE 'ano' e 'trimestre' uma vez a cada trimestre. O resto roda sozinho.",
-  "ano": 2026,
-  "trimestre": 3,
+  "_comentario": "Ano e trimestre sao calculados automaticamente pela data (domingo da licao). So o feed_rss precisa estar aqui.",
   "feed_rss": "https://anchor.fm/s/3fb59cf0/podcast/rss",
   "_explicacao_feed": "URL do feed RSS do podcast Rede Brasil (pegue em getrssfeed.com colando o link do Spotify). O script le esse feed e baixa o MP3 da licao mais recente."
 }
