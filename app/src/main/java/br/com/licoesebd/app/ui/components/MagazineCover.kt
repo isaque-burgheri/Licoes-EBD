@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 import br.com.licoesebd.app.data.model.Magazine
 import br.com.licoesebd.app.ui.theme.EbdTypography
 import br.com.licoesebd.app.ui.theme.Gold
-import android.graphics.BitmapFactory
+import android.util.Log
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.CancellationException
@@ -183,14 +183,7 @@ private fun rememberCoverBitmap(
         try {
             val file = coverLoader(magazine) ?: return@LaunchedEffect
             val decoded = withContext(Dispatchers.IO) {
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(file.absolutePath, bounds)
-                val options = BitmapFactory.Options()
-                while (bounds.outWidth / options.inSampleSize > 480 ||
-                    bounds.outHeight / options.inSampleSize > 800) {
-                    options.inSampleSize *= 2
-                }
-                BitmapFactory.decodeFile(file.absolutePath, options)?.asImageBitmap()
+                decodeCoverBitmap(file)?.asImageBitmap()
             }
             if (decoded != null) {
                 coverBitmaps.put(key, decoded)
@@ -200,8 +193,8 @@ private fun rememberCoverBitmap(
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
-            // A failed preview must not take down the library screen.
+        } catch (failure: Exception) {
+            Log.w("MagazineCover", "Falha ao carregar ou decodificar uma capa", failure)
         }
     }
     return bitmap

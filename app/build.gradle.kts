@@ -21,8 +21,8 @@ android {
         applicationId = "br.com.licoesebd.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.6"
+        versionCode = 4
+        versionName = "1.6.1"
         vectorDrawables { useSupportLibrary = true }
 
         buildConfigField("String", "DRIVE_API_KEY", "\"$driveApiKey\"")
@@ -59,6 +59,7 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 
     // Core
     implementation("androidx.core:core-ktx:1.13.1")
