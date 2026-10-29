@@ -6,6 +6,30 @@ App nativo (Kotlin + Jetpack Compose) para leitura das revistas da Escola Bíbli
 
 ---
 
+## Gerar APK pelo GitHub Actions
+
+1. Abra **Settings → Secrets and variables → Actions → New repository secret**.
+2. Cadastre **DRIVE_API_KEY** com sua chave da Google Drive API.
+3. Opcional: cadastre **AUDIO_FOLDER_ID** como Secret ou Variable para habilitar os áudios.
+4. Abra **Actions → Gerar APK → Run workflow**, mantendo a branch **master**.
+5. Quando concluir, abra a execução e baixe **Artifacts → Licoes-EBD-APK**.
+6. Extraia o ZIP e instale o arquivo **app-debug.apk** no Android 7 ou superior.
+
+Mudanças no código Android ou na configuração de compilação em master geram um novo APK automaticamente.
+Alterações apenas no README ou nos registros de downloads não iniciam outra compilação.
+O fluxo usa Java 17 e Gradle 8.7; não é preciso instalar Android Studio no seu computador.
+
+Sem DRIVE_API_KEY, a compilação funciona, mas o APK não consegue carregar a biblioteca do Drive.
+A chave é lida dos Secrets durante a compilação e não é gravada no código do repositório.
+Como o app acessa o Drive diretamente, a chave fica incorporada no APK e pode ser extraída:
+restrinja sua utilização no Google Cloud conforme as necessidades do app.
+
+Este fluxo gera um APK **debug**, para testes e instalação manual.
+A assinatura de teste pode mudar entre execuções; não equivale a uma versão release com chave de assinatura fixa.
+Para substituir um app já instalado, a assinatura precisa ser compatível.
+
+---
+
 ## ⚡ Como abrir e gerar o APK
 
 ### 1. Pré-requisitos

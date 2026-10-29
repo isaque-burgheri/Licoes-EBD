@@ -10,8 +10,8 @@ val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-val driveApiKey: String = localProps.getProperty("DRIVE_API_KEY", "")
-val audioFolderId: String = localProps.getProperty("AUDIO_FOLDER_ID", "")
+val driveApiKey: String = localProps.getProperty("DRIVE_API_KEY", System.getenv("DRIVE_API_KEY") ?: "")
+val audioFolderId: String = localProps.getProperty("AUDIO_FOLDER_ID", System.getenv("AUDIO_FOLDER_ID") ?: "")
 
 android {
     namespace = "br.com.licoesebd.app"
