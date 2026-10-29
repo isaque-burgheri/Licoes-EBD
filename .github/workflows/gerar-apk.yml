@@ -54,6 +54,9 @@ jobs:
             echo "::warning::Secret DRIVE_API_KEY ausente. O APK sera compilado, mas a biblioteca precisa dessa chave para acessar o Google Drive."
           fi
 
+      - name: Testar cache de capas
+        run: gradle --no-daemon testDebugUnitTest --stacktrace
+
       - name: Compilar APK
         run: gradle --no-daemon assembleDebug --stacktrace
 

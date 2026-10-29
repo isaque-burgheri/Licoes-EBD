@@ -4,6 +4,10 @@ import android.content.Context
 import android.net.Uri
 import br.com.licoesebd.app.BuildConfig
 import br.com.licoesebd.app.data.model.Magazine
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -26,6 +30,9 @@ class PublicDriveRepository(private val context: Context) {
      * https://drive.google.com/drive/folders/1E_ANsYGpvFPOjNV8VguC7EdfTodDljLm
      */
     private val rootFolderId = "1E_ANsYGpvFPOjNV8VguC7EdfTodDljLm"
+
+    private val coverCache = CoverFileCache(File(context.cacheDir, "cover-thumbnails"))
+    private val pdfLocks = Array(32) { Mutex() }
 
     private val apiKey: String get() = BuildConfig.DRIVE_API_KEY
 
@@ -79,8 +86,20 @@ class PublicDriveRepository(private val context: Context) {
     suspend fun downloadPdf(magazine: Magazine): Uri = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "magazines").apply { mkdirs() }
         val out = File(dir, "${magazine.id}.pdf")
-        if (!out.exists() || out.length() == 0L) {
-            downloadPublicFile(magazine.id, out)
+        pdfLocks[(magazine.id.hashCode() and Int.MAX_VALUE) % pdfLocks.size].withLock {
+            if (!out.exists() || out.length() == 0L ||
+                (magazine.modifiedTimeMillis?.let { out.lastModified() < it } == true)) {
+                val temporary = File.createTempFile("pdf-", ".part", dir)
+                try {
+                    downloadPublicFile(magazine.id, temporary)
+                    currentCoroutineContext().ensureActive()
+                    check(temporary.length() > 0L && temporary.renameTo(out)) {
+                        "Não foi possível salvar a revista"
+                    }
+                } finally {
+                    temporary.delete()
+                }
+            }
         }
         Uri.fromFile(out)
     }
@@ -93,7 +112,7 @@ class PublicDriveRepository(private val context: Context) {
      * For files larger than ~25MB, Drive serves an HTML interstitial with a
      * confirmation token. We detect this and re-request with the token.
      */
-    private fun downloadPublicFile(fileId: String, target: File) {
+    private suspend fun downloadPublicFile(fileId: String, target: File) {
         val cookies = mutableMapOf<String, String>()
         val firstUrl = "https://drive.google.com/uc?export=download&id=$fileId"
 
@@ -118,7 +137,13 @@ class PublicDriveRepository(private val context: Context) {
                 throw RuntimeException("HTTP ${resp.code} ao baixar")
             }
             FileOutputStream(target).use { output ->
-                resp.inputStream.copyTo(output, bufferSize = 32 * 1024)
+                val buffer = ByteArray(32 * 1024)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val count = resp.inputStream.read(buffer)
+                    if (count < 0) break
+                    output.write(buffer, 0, count)
+                }
             }
         } finally {
             resp.disconnect()
@@ -166,47 +191,84 @@ class PublicDriveRepository(private val context: Context) {
     }
 
     /**
-     * Returns a cached cover bitmap path for the magazine.
-     * Downloads the PDF if needed, then renders the first page as PNG.
-     * Returns null if anything fails (UI will fall back to the colored cover).
+     * Uses Drive's small preview first. Only unavailable/invalid previews fall
+     * back to downloading and rendering a PDF, one at a time.
      */
     suspend fun getCoverFile(magazine: Magazine): File? = withContext(Dispatchers.IO) {
-        val coversDir = File(context.cacheDir, "covers").apply { mkdirs() }
-        val coverFile = File(coversDir, "${magazine.id}.png")
-        if (coverFile.exists() && coverFile.length() > 0) return@withContext coverFile
-        try {
-            val pdfUri = downloadPdf(magazine)
-            val pdfFile = File(pdfUri.path ?: return@withContext null)
-            val pfd = android.os.ParcelFileDescriptor.open(
-                pdfFile,
-                android.os.ParcelFileDescriptor.MODE_READ_ONLY
-            )
-            val renderer = android.graphics.pdf.PdfRenderer(pfd)
-            try {
-                if (renderer.pageCount == 0) return@withContext null
-                val page = renderer.openPage(0)
-                val targetW = 480
-                val ratio = page.height.toFloat() / page.width.toFloat()
-                val bmp = android.graphics.Bitmap.createBitmap(
-                    targetW,
-                    (targetW * ratio).toInt().coerceAtLeast(1),
-                    android.graphics.Bitmap.Config.ARGB_8888
-                )
-                bmp.eraseColor(android.graphics.Color.WHITE)
-                page.render(bmp, null, null,
-                    android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                page.close()
-                FileOutputStream(coverFile).use { out ->
-                    bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, out)
-                }
-                bmp.recycle()
-            } finally {
-                renderer.close()
-                pfd.close()
+        coverCache.get(
+            key = magazine.coverCacheKey,
+            thumbnail = { target ->
+                val link = magazine.thumbnailLink
+                if (link.isNullOrBlank()) false else downloadThumbnail(link, target)
+            },
+            fallback = { target ->
+                val pdfUri = downloadPdf(magazine)
+                val pdfFile = File(requireNotNull(pdfUri.path))
+                renderFirstPage(pdfFile, target)
             }
-            coverFile
-        } catch (_: Throwable) {
-            null
+        )
+    }
+
+    private suspend fun downloadThumbnail(link: String, target: File): Boolean {
+        val url = URL(link)
+        if (url.protocol != "https") return false
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 6000
+            readTimeout = 8000
+            setRequestProperty("Accept", "image/*")
+        }
+        try {
+            if (conn.responseCode !in 200..299) return false
+            // A thumbnail should be tiny. Reject login/error documents and huge responses.
+            val maxBytes = 2 * 1024 * 1024
+            if (conn.contentLengthLong > maxBytes) return false
+            conn.inputStream.use { input ->
+                FileOutputStream(target).use { output ->
+                    val buffer = ByteArray(16 * 1024)
+                    var total = 0
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > maxBytes) return false
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(target.absolutePath, bounds)
+            return bounds.outWidth > 0 && bounds.outHeight > 0
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun renderFirstPage(pdfFile: File, target: File): Boolean {
+        android.os.ParcelFileDescriptor.open(
+            pdfFile, android.os.ParcelFileDescriptor.MODE_READ_ONLY
+        ).use { descriptor ->
+            android.graphics.pdf.PdfRenderer(descriptor).use { renderer ->
+                if (renderer.pageCount == 0) return false
+                renderer.openPage(0).use { page ->
+                    val width = 480
+                    val height = (width * page.height.toFloat() / page.width)
+                        .toInt().coerceIn(1, 1600)
+                    val bitmap = android.graphics.Bitmap.createBitmap(
+                        width, height, android.graphics.Bitmap.Config.ARGB_8888
+                    )
+                    try {
+                        bitmap.eraseColor(android.graphics.Color.WHITE)
+                        page.render(bitmap, null, null,
+                            android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        FileOutputStream(target).use { output ->
+                            return bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, output)
+                        }
+                    } finally {
+                        bitmap.recycle()
+                    }
+                }
+            }
         }
     }
 

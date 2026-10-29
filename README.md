@@ -6,6 +6,18 @@ App nativo (Kotlin + Jetpack Compose) para leitura das revistas da Escola Bíbli
 
 ---
 
+## Capas mais leves (versão 1.6)
+
+A biblioteca usa primeiro as miniaturas fornecidas pelo Google Drive, sem precisar baixar cada PDF inteiro.
+As capas ficam em cache no disco e as imagens recentes também em memória (até 8 MB).
+O carregamento acompanha as linhas visíveis da biblioteca, com até quatro miniaturas simultâneas.
+Quando não houver miniatura válida, o app usa a primeira página do PDF como alternativa, uma revista por vez.
+Essa alternativa tem uma fila separada para não bloquear as demais miniaturas.
+Mudanças na data de modificação da revista invalidam sua capa em cache.
+
+O ganho depende da rede e da disponibilidade de miniaturas no Drive; não há tempo fixo garantido.
+O fluxo de APK executa testes automáticos de cache, concorrência, alternativa por PDF e cancelamento.
+
 ## Gerar APK pelo GitHub Actions
 
 1. Abra **Settings → Secrets and variables → Actions → New repository secret**.
@@ -129,7 +141,7 @@ Aceita variações: `L3` ou `L03`, `Lição 3`, maiúsculas/minúsculas. Funcion
 - Abre direto na biblioteca (sem login).
 - Duas abas: **Lições** (PDFs) e **Áudios** (podcasts).
 - Varre recursivamente as pastas públicas do Drive.
-- Mostra PDFs como capas (renderizadas da primeira página).
+- Mostra miniaturas do Drive como capas, com renderização da primeira página do PDF como alternativa.
 - Toca numa capa → baixa o PDF para cache local → abre no visualizador de PDF padrão do celular.
 - Toca numa faixa de áudio → toca via streaming.
 - Tema claro e escuro automático.

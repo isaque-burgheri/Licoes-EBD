@@ -105,7 +105,7 @@ private fun LoadedHome(
             }
             // Build rows of 3 covers
             val rows = list.chunked(3)
-            items(rows) { row ->
+            items(rows, key = { row -> "covers_" + row.first().id }) { row ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -113,6 +113,7 @@ private fun LoadedHome(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     row.forEach { mag ->
+                        key(mag.id) {
                         MagazineCover(
                             magazine = mag,
                             coverLoader = coverLoader,
@@ -121,6 +122,7 @@ private fun LoadedHome(
                                 .aspectRatio(3f / 4.2f),
                             onClick = { onMagazineClick(mag) }
                         )
+                        }
                     }
                     repeat(3 - row.size) {
                         Spacer(

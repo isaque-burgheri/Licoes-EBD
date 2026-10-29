@@ -13,6 +13,8 @@ data class Magazine(
     val webViewLink: String?,
     val coverColorIndex: Int  // 0..5 to pick a gradient
 ) {
+    // A changed PDF gets a fresh disk/memory cover instead of a stale image.
+    val coverCacheKey: String get() = "$id:${modifiedTimeMillis ?: 0L}"
     val isPdf: Boolean get() = mimeType == "application/pdf"
 }
 

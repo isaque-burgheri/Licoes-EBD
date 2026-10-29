@@ -25,6 +25,10 @@ import androidx.compose.ui.unit.sp
 import br.com.licoesebd.app.data.model.Magazine
 import br.com.licoesebd.app.ui.theme.EbdTypography
 import br.com.licoesebd.app.ui.theme.Gold
+import android.graphics.BitmapFactory
+import android.util.LruCache
+import androidx.compose.ui.graphics.ImageBitmap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -39,7 +43,7 @@ private val coverGradients = listOf(
 
 /**
  * Compact cover used in the library grid.
- * Loads the first PDF page lazily; falls back to the colored gradient cover.
+ * Loads a cached Drive thumbnail lazily; keeps the colored cover while loading.
  */
 @Composable
 fun MagazineCover(
@@ -48,18 +52,7 @@ fun MagazineCover(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    var bmp by remember(magazine.id) {
-        mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
-    }
-    LaunchedEffect(magazine.id) {
-        val f = coverLoader(magazine) ?: return@LaunchedEffect
-        val decoded = withContext(Dispatchers.IO) {
-            try {
-                android.graphics.BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
-            } catch (_: Throwable) { null }
-        }
-        bmp = decoded
-    }
+    val bmp = rememberCoverBitmap(magazine, coverLoader)
 
     val image = bmp
     Box(
@@ -127,18 +120,7 @@ fun MagazineCoverLarge(
     coverLoader: suspend (Magazine) -> java.io.File?,
     onClick: () -> Unit
 ) {
-    var bmp by remember(magazine.id) {
-        mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
-    }
-    LaunchedEffect(magazine.id) {
-        val f = coverLoader(magazine) ?: return@LaunchedEffect
-        val decoded = withContext(Dispatchers.IO) {
-            try {
-                android.graphics.BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
-            } catch (_: Throwable) { null }
-        }
-        bmp = decoded
-    }
+    val bmp = rememberCoverBitmap(magazine, coverLoader)
 
     Box(
         modifier = Modifier
@@ -180,4 +162,47 @@ fun MagazineCoverLarge(
             }
         }
     }
+}
+
+
+// Keep recently seen images while scrolling, capped by decoded pixel memory.
+private val coverBitmaps = object : LruCache<String, ImageBitmap>(8 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: ImageBitmap): Int =
+        value.width * value.height * 4
+}
+
+@Composable
+private fun rememberCoverBitmap(
+    magazine: Magazine,
+    coverLoader: suspend (Magazine) -> java.io.File?
+): ImageBitmap? {
+    val key = magazine.coverCacheKey
+    var bitmap by remember(key) { mutableStateOf(coverBitmaps.get(key)) }
+    LaunchedEffect(key) {
+        if (bitmap != null) return@LaunchedEffect
+        try {
+            val file = coverLoader(magazine) ?: return@LaunchedEffect
+            val decoded = withContext(Dispatchers.IO) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.absolutePath, bounds)
+                val options = BitmapFactory.Options()
+                while (bounds.outWidth / options.inSampleSize > 480 ||
+                    bounds.outHeight / options.inSampleSize > 800) {
+                    options.inSampleSize *= 2
+                }
+                BitmapFactory.decodeFile(file.absolutePath, options)?.asImageBitmap()
+            }
+            if (decoded != null) {
+                coverBitmaps.put(key, decoded)
+                bitmap = decoded
+            } else {
+                withContext(Dispatchers.IO) { file.delete() }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // A failed preview must not take down the library screen.
+        }
+    }
+    return bitmap
 }
